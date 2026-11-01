@@ -12,6 +12,7 @@ SUGGEST_PATCH：/notes（本会话的账本建议候选，同样按 key 隔离�
 
 from __future__ import annotations
 
+import os
 import threading
 import time
 from typing import Any
@@ -268,7 +269,9 @@ def main():
 
     srv = svc.cfg.get("server") or {}
     threading.Thread(target=_loop, args=(float(srv.get("index_interval_s", 60)),), daemon=True).start()
-    uvicorn.run(app, host=str(srv.get("host", "127.0.0.1")), port=int(srv.get("port", 8093)), log_level="warning")
+    # MEMORY_RAG_HOST 环境变量优先（容器内监听 0.0.0.0，远程连接）
+    host = os.environ.get("MEMORY_RAG_HOST") or srv.get("host", "127.0.0.1")
+    uvicorn.run(app, host=str(host), port=int(srv.get("port", 8093)), log_level="warning")
 
 
 if __name__ == "__main__":

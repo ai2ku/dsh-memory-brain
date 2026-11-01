@@ -19,7 +19,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import http from 'node:http';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -108,11 +108,26 @@ class RagProcess {
     return this.proc !== null && this.proc.exitCode === null;
   }
 
+  /** 同步探测 :8093 是否已被现有服务（Docker 容器）监听。 */
+  _probePort(port) {
+    try {
+      const r = spawnSync('curl', ['-s', '--max-time', '1', `http://127.0.0.1:${port}/health`], { stdio: 'ignore' });
+      return r.status === 0;
+    } catch {
+      return false;
+    }
+  }
+
   start() {
     if (this.running()) return this.proc;
     if (!this.cfg.enabled) return null;
     const ragDir = path.join(this.projectRoot, 'sidecars', 'memory-rag');
     const py = path.join(ragDir, '.venv', 'bin', 'python');
+    // Docker 容器替代：:8093 已有服务（容器）就不 spawn .venv，避免端口冲突
+    if (this._probePort(8093)) {
+      diag('memory-rag :8093 已被现有服务监听（Docker 容器），跳过 .venv spawn');
+      return null;
+    }
     diag(`spawn memory-rag: ${py} -m memory_rag.app (cwd=${ragDir})`);
     this.proc = spawn(py, ['-m', 'memory_rag.app'], {
       cwd: ragDir,

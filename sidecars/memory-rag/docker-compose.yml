@@ -1,0 +1,30 @@
+# memory-rag Docker 编排：跨终端共享记忆
+# 用法：cd sidecars/memory-rag && docker compose up -d --build
+# 数据卷：./data（容器 /data，记忆持久化在 NAS 磁盘）
+# 远程访问：局域网 {NAS-IP}:8093，token 认证（M5 加固）
+
+services:
+  memory-rag:
+    build: .
+    container_name: memory-rag
+    restart: unless-stopped
+    environment:
+      # 数据目录（容器内 /data，挂载 NAS 磁盘）
+      - MEMORY_RAG_STATE_DIR=/data
+      # 监听 0.0.0.0（远程连接）
+      - MEMORY_RAG_HOST=0.0.0.0
+    volumes:
+      # 记忆数据持久化：挂载项目 state 目录（现有记忆直接用，不迁移）
+      # 绝对路径：/vol1/@appshare/fn-deepseek-harness/默认/dsh-memory-brain/state
+      - /vol1/@appshare/fn-deepseek-harness/默认/dsh-memory-brain/state:/data
+      # 配置（可选，容器内只读）
+      - ./config.yml:/app/config.yml:ro
+    ports:
+      # 局域网访问（安全加固后改 token）
+      - "8093:8093"
+    # 健康检查
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8093/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
