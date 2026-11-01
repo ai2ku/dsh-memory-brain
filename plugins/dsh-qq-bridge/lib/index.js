@@ -183,11 +183,21 @@ export function apply(ctx, config) {
         path: '/dsh-qq-bridge/health',
         handler: async (req, res) => {
           res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
+          // 控制台 token（供设置页拼入口 URL，免人工输入）
+          let consoleToken = '';
+          try {
+            const cfgPath = path.join(PROJECT_ROOT, 'config.json');
+            if (fs.existsSync(cfgPath)) {
+              const projCfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+              consoleToken = String(projCfg.consoleToken || '');
+            }
+          } catch { /* 读不到就不返回 token */ }
           res.end(JSON.stringify({
             ok: true,
             plugin: 'dsh-qq-bridge',
             bridge: bridge.running() ? 'running' : 'stopped',
             bridgePath: cfg.bridgePath,
+            consoleToken,
           }));
         },
       }), 'dsh-qq-bridge: 探活路由');
