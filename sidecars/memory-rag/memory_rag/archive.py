@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-KEY_RE = re.compile(r"^(group|private):(\d+)$")
+KEY_RE = re.compile(r"^(group|private|persona|chat|device):([\w-]+)$")
 FILE_RE = re.compile(r"^\d{4}-\d{2}\.jsonl$")
 
 

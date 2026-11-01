@@ -9,7 +9,7 @@
 // 一律不往外带（避免绝对路径触发出站审计，见 CLAUDE.md 坑 6）。
 // DECAY_PATCH：`refs` 只给桥接内部用（检索命中映射回存档行），桥接不得把它发给 AI；
 // 它被定义成不可枚举属性，所以 `JSON.stringify(search())` 也不会把它带出去。
-const KEY_RE = /^(group|private):\d+$/;
+const KEY_RE = /^(group|private|persona|chat|device):[\w-]+$/;
 const DEFAULT_URL = 'http://127.0.0.1:8093';
 const DEFAULT_TIMEOUT_MS = 3000;
 const MAX_QUERY_CHARS = 500;
