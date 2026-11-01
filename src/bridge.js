@@ -1948,6 +1948,42 @@ async function main() {
     if (s === `private:${ownerId()}`) return `chat:${crossUserId()}`;
     return s;
   }
+  /** 本机设备标识：config.json crossDevice.deviceId 可配置；默认 hostname 清洗成 [\w-]+。 */
+  function deviceId() {
+    try {
+      const c = readJsonSafe(path.join(ROOT, 'config.json'), null);
+      const d = c?.crossDevice?.deviceId;
+      if (typeof d === 'string' && d.trim()) return d.trim().replace(/[^\w-]/g, '-');
+    } catch { /* 落到默认 */ }
+    const h = os.hostname() || 'device';
+    return h.replace(/[^\w-]/g, '-').slice(0, 48) || 'device';
+  }
+  /** M3：本机能力描述（OS/shell/工具/路径），跨端适配用。 */
+  function deviceCapability() {
+    const tools = ['node', 'git', 'curl'];
+    const paths = { cwd: process.cwd(), homedir: os.homedir() };
+    // Windows 用 PowerShell，其余用 bash
+    return {
+      os: process.platform,
+      shell: process.platform === 'win32' ? 'powershell' : 'bash',
+      tools,
+      paths,
+      hostname: os.hostname(),
+      node: process.version,
+      arch: process.arch,
+    };
+  }
+  /** 启动时上报本机能力到 device:{deviceId}（幂等，失败静默）。 */
+  function registerDeviceCapability() {
+    if (!rag || !rag.registerDevice) return;
+    const key = `device:${deviceId()}`;
+    rag.registerDevice(key, deviceCapability())
+      .then((r) => {
+        if (r?.ok && r.data?.ok) log(`[device] 已上报本机能力：${key}`);
+        else if (r && !r.ok) log(`[device] 上报失败：${r.status}`);
+      })
+      .catch(() => { /* 网络/超时静默，下次重启再报 */ });
+  }
   function intimacyOf(uid) {
     try { return persona?.relationOf?.(uid)?.intimacy; } catch { return undefined; }
   }
@@ -11123,6 +11159,9 @@ async function main() {
     startOwnLife();
     startLifeLoop();
   }
+
+  // M3：启动后上报本机能力（device:{deviceId}）。放启动序列最后，避免阻塞主流程。
+  registerDeviceCapability();
 
   // 当前角色扮演提示：读 state/current-role.json + roles/<角色>.md，
   // 由桥接注入到 QQ 群消息（群友无法通过对话修改，只能由管理端写该文件）。

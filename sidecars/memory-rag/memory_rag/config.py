@@ -25,12 +25,15 @@ class Paths:
     rag: Path            # state/long-memory/rag（派生数据，随时可删可重建）
     # RAG_PATCH（P2）：桥接删完存档后写的遗忘请求（每个会话一个 JSON），本服务消费
     forget_requests: Path  # state/long-memory/forget-requests
+    # M3：设备能力记录（每台设备一个 JSON：device:{deviceId} → {os, shell, tools, paths, ...}）
+    devices: Path  # state/long-memory/devices
 
     @classmethod
     def from_state(cls, state: Path) -> "Paths":
         lm = state / "long-memory"
         return cls(state=state, long_memory=lm, archive=lm / "archive", people=lm / "people.json",
-                   rag=lm / "rag", forget_requests=lm / "forget-requests")
+                   rag=lm / "rag", forget_requests=lm / "forget-requests",
+                   devices=lm / "devices")
 
 
 def load_config(path: str | os.PathLike | None = None) -> dict[str, Any]:

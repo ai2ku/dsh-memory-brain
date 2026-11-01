@@ -12,9 +12,11 @@ SUGGEST_PATCH：/notes（本会话的账本建议候选，同样按 key 隔离�
 
 from __future__ import annotations
 
+import json
 import os
 import threading
 import time
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
@@ -242,6 +244,96 @@ def distill_retry():
     if svc.distiller is None:
         raise HTTPException(503, f"{svc.mismatch or '向量库不可用'}")
     return {"ok": True, "retried": svc.distiller.retry_failed()}
+
+
+# ---------------------------------------------------------------- M3：设备能力（跨端适配）
+
+
+class DeviceRegisterReq(BaseModel):
+    """设备能力上报。key 必须是 device:{deviceId}。capability 是结构化描述。"""
+    key: str = ""
+    capability: dict[str, Any] = Field(default_factory=dict)
+
+
+class DeviceGetReq(BaseModel):
+    key: str = ""
+
+
+def _devices_dir() -> Path:
+    return svc.cfg["paths"].devices
+
+
+def _device_file(device_id: str) -> Path:
+    # device_id 只允许 [\w-]+（KEY_RE 的 device 段），避免路径穿越
+    import re as _re
+    if not _re.fullmatch(r"[\w-]+", device_id or ""):
+        raise HTTPException(400, "deviceId 不合法（只允许字母数字下划线连字符）")
+    return _devices_dir() / f"{device_id}.json"
+
+
+def _read_device(device_id: str) -> dict | None:
+    f = _device_file(device_id)
+    if not f.exists():
+        return None
+    try:
+        return json.loads(f.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def _write_device(device_id: str, data: dict) -> None:
+    d = _devices_dir()
+    d.mkdir(parents=True, exist_ok=True)
+    os.chmod(d, 0o700)
+    f = _device_file(device_id)
+    tmp = f.with_suffix(".tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.chmod(tmp, 0o600)
+    tmp.replace(f)
+
+
+@app.post("/device/register")
+def device_register(req: DeviceRegisterReq):
+    """注册/更新一台设备的能力（OS、shell、工具、路径等）。幂等：同 key 覆盖。"""
+    if not valid_key(req.key) or not req.key.startswith("device:"):
+        raise HTTPException(400, "key 必填，格式 device:<deviceId>")
+    device_id = req.key.split(":", 1)[1]
+    data = _read_device(device_id) or {}
+    data["deviceId"] = device_id
+    data["capability"] = req.capability
+    data["updatedAt"] = int(time.time() * 1000)
+    data["ts"] = int(time.time() * 1000)  # 兼容 search 的 t 字段口径
+    _write_device(device_id, data)
+    return {"ok": True, "key": req.key, "deviceId": device_id}
+
+
+@app.post("/device/get")
+def device_get(req: DeviceGetReq):
+    """读取一台设备的能力。找不到返回 ok:true、found:false（不 404，方便桥接轮询）。"""
+    if not valid_key(req.key) or not req.key.startswith("device:"):
+        raise HTTPException(400, "key 必填，格式 device:<deviceId>")
+    device_id = req.key.split(":", 1)[1]
+    data = _read_device(device_id)
+    if data is None:
+        return {"ok": True, "key": req.key, "deviceId": device_id, "found": False, "capability": None}
+    return {"ok": True, "key": req.key, "deviceId": device_id, "found": True, **data}
+
+
+@app.get("/device/list")
+def device_list():
+    """列出所有已注册设备（用于跨端发现）。"""
+    d = _devices_dir()
+    if not d.exists():
+        return {"ok": True, "devices": []}
+    out = []
+    for f in sorted(d.glob("*.json")):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+            out.append({"deviceId": f.stem, "capability": data.get("capability", {}),
+                        "updatedAt": data.get("updatedAt")})
+        except Exception:
+            continue
+    return {"ok": True, "devices": out}
 
 
 def _loop(interval: float):

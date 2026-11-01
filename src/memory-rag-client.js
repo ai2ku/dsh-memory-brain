@@ -588,8 +588,43 @@ export function createMemoryRagClient({ url = DEFAULT_URL, timeoutMs = DEFAULT_T
     }, DISTILL_RETRY_TIMEOUT_MS);
   }
 
+  /** POST /device/register：上报本机能力（OS/shell/tools/paths）。key 须 device:{deviceId}。 */
+  function registerDevice(key, capability) {
+    if (!enabled()) return offResult();
+    if (!KEY_RE.test(String(key ?? ''))) {
+      log(`[rag] 拒绝设备注册：key 不合法`);
+      return null;
+    }
+    return callJson('/device/register', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ key: String(key), capability: capability ?? {} })
+    }, timeout);
+  }
+
+  /** POST /device/get：读一台设备的能力。返回 { ok, status, data } 或 null。 */
+  function getDevice(key) {
+    if (!enabled()) return offResult();
+    if (!KEY_RE.test(String(key ?? ''))) {
+      log(`[rag] 拒绝设备读取：key 不合法`);
+      return null;
+    }
+    return callJson('/device/get', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ key: String(key) })
+    }, timeout);
+  }
+
+  /** GET /device/list：列出所有已注册设备。 */
+  function listDevices() {
+    if (!enabled()) return offResult();
+    return callJson('/device/list', { method: 'GET' }, timeout);
+  }
+
   return {
     search, health, indexRun, rebuild, forget, recall, associate, summaries, notes, distillRetry,
+    registerDevice, getDevice, listDevices,
     // APIHUB_PATCH：给桥接算 history-search 的 semantic / 判断总开关用。
     enabled
   };
