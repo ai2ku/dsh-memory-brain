@@ -16,5 +16,8 @@ dependencies = [
 [dependency-groups]
 dev = ["pytest"]
 
+[tool.setuptools.packages.find]
+include = ["memory_rag*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
