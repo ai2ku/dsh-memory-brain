@@ -5108,7 +5108,11 @@ function setConsolePage(page, { updateHash = true, focus = false, target = '' } 
   document.getElementById('pageTitle').textContent = consolePages[page][1];
   document.getElementById('pageDescription').textContent = consolePages[page][2];
   document.title = consolePages[page][0] + ' · QQ 桥接控制台';
-  if (updateHash && location.hash !== '#' + page) history.pushState({}, '', '#' + page);
+  // 用绝对路径 + hash：相对 '#'+page 会按 document.baseURI 解析，而 DSH 经网关
+  // 部署时网关注入 <base href="/app/fn-deepseek-harness/">，baseURI 不含 /dsh-qq-bridge，
+  // pushState 会把 '/dsh-qq-bridge' 从路径里吞掉（变 /app/fn-deepseek-harness/#page）。
+  // location.pathname + location.search + '#page' 是绝对路径，不受 <base> 影响。
+  if (updateHash && location.hash !== '#' + page) history.pushState({}, '', location.pathname + location.search + '#' + page);
   closeConsoleSearch();
   // 语音库按需加载：进入二代仿真页时才探测（避免每次开控制台都压网关）。
   if (page === 'social-v2' && typeof loadVoiceLibrary === 'function') loadVoiceLibrary();
