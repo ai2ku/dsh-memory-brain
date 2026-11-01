@@ -3282,7 +3282,11 @@ async function api(path, method, body, _retried = 0) {
   const headers = body ? {'content-type':'application/json'} : {};
   const token = localStorage.getItem('consoleToken');
   if (token) headers['x-console-token'] = token;
-  const res = await fetch(path, { method: method || 'GET', headers, body: body ? JSON.stringify(body) : undefined });
+  // 通过 DSH webServer 转发访问时（页面在 /dsh-qq-bridge/ 下），/api/xxx 需加前缀；
+  // 直接访问 :3100 时不需要。
+  const inDsh = window.location.pathname.includes('/dsh-qq-bridge');
+  const apiPath = (inDsh && typeof path === 'string' && path.startsWith('/api/')) ? '/dsh-qq-bridge' + path : path;
+  const res = await fetch(apiPath, { method: method || 'GET', headers, body: body ? JSON.stringify(body) : undefined });
   if (res.status === 401) {
     if (_retried >= 2) {
       localStorage.removeItem('consoleToken');

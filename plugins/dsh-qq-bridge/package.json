@@ -1,0 +1,28 @@
+{
+  "name": "dsh-qq-bridge",
+  "version": "0.2.1-r1",
+  "description": "QQ 桥接纯插件：DSH 启动时自动拉起 bridge（SnowLuma→QQ）与 memory-rag，控制台嵌入 DSH WebUI 设置页",
+  "type": "module",
+  "main": "./lib/index.js",
+  "license": "MIT",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-settings-plugins"
+      ]
+    }
+  },
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {}
+}

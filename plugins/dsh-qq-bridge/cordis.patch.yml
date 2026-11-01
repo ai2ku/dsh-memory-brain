@@ -1,0 +1,7 @@
+# dsh-qq-bridge 插件 entry。
+# id 必须等于插件注册的设置命名空间名（用于 DSH settings 读写）。
+# name 是包名 dsh-qq-bridge，二者职责不同。
+- insert:
+    - id: dsh-qq-bridge
+      name: dsh-qq-bridge
+      config: {}
