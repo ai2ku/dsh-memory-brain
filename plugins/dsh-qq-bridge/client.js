@@ -6,8 +6,10 @@ window.__ModuleLoader__.load({
   factory: (require) => {
     const React = require('react');
     const h = React.createElement;
-    // 相对路径：DSH 部署在子路径时由 <base href> 自动映射前缀（见 dsh-feiyu-mood）
-    const API = '/dsh-qq-bridge';
+    // 相对路径：DSH 部署在子路径时由 <base href> 自动补前缀（见 dsh-feiyu-mood）
+    // API/链接都用 document.baseURI 解析，确保带正确前缀（/app/fn-deepseek-harness/…）
+    const apiUrl = (p) => new URL('dsh-qq-bridge/' + p, document.baseURI).href;
+    const entryUrl = () => new URL('dsh-qq-bridge/', document.baseURI).href;
 
     function Panel() {
       const [health, setHealth] = React.useState(null);
@@ -15,7 +17,7 @@ window.__ModuleLoader__.load({
 
       React.useEffect(() => {
         let alive = true;
-        fetch(API + '/health', { headers: { accept: 'application/json' } })
+        fetch(apiUrl('health'), { headers: { accept: 'application/json' } })
           .then((r) => r.json())
           .then((d) => { if (alive) setHealth(d); })
           .catch((e) => { if (alive) setErr(String(e?.message || e)); });
@@ -33,7 +35,7 @@ window.__ModuleLoader__.load({
         health ? h('div', {},
           row('bridge', health.bridge === 'running' ? '✅ 运行中' : '⏸ 停止'),
           row('bridgePath', h('code', {}, String(health.bridgePath || '—'))),
-          row('控制台', h('a', { href: API + '/', target: '_blank', rel: 'noreferrer' }, '打开控制台 →')),
+          row('控制台', h('a', { href: entryUrl(), target: '_blank', rel: 'noreferrer' }, '打开控制台 →')),
         ) : (err ? null : h('div', { style: { color: '#888' } }, '加载中…')),
       );
     }
