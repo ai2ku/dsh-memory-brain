@@ -3284,8 +3284,20 @@ async function api(path, method, body, _retried = 0) {
   if (token) headers['x-console-token'] = token;
   // 通过 DSH webServer 转发访问时（页面在 /dsh-qq-bridge/ 下），/api/xxx 需加前缀；
   // 直接访问 :3100 时不需要。
-  const inDsh = window.location.pathname.includes('/dsh-qq-bridge');
-  const apiPath = (inDsh && typeof path === 'string' && path.startsWith('/api/')) ? '/dsh-qq-bridge' + path : path;
+  // 子路径部署（DSH 挂 /app/fn-deepseek-harness/ 下）的修复：
+  // 不能硬编码根相对 '/dsh-qq-bridge'（会丢子路径前缀 → 404 'not found'），
+  // 也不能只靠 location.pathname.includes()（页面在子路径根时误判直连）。
+  // 正确做法：从 location.pathname 取 '/dsh-qq-bridge' 之前的子路径前缀，
+  // 拼 prefix + '/dsh-qq-bridge' + path。location.pathname 是纯 pathname（无 origin），
+  // 子路径下 prefix='/app/fn-deepseek-harness'，根路径下 prefix=''，都正确。
+  const _inDsh = window.location.pathname.includes('/dsh-qq-bridge')
+    || String(document.baseURI || '').includes('/dsh-qq-bridge');
+  const _pathPrefix = _inDsh && window.location.pathname.includes('/dsh-qq-bridge')
+    ? window.location.pathname.slice(0, window.location.pathname.indexOf('/dsh-qq-bridge'))
+    : '';
+  const apiPath = (_inDsh && typeof path === 'string' && path.startsWith('/api/'))
+    ? _pathPrefix + '/dsh-qq-bridge' + path
+    : path;
   const res = await fetch(apiPath, { method: method || 'GET', headers, body: body ? JSON.stringify(body) : undefined });
   if (res.status === 401) {
     if (_retried >= 2) {
