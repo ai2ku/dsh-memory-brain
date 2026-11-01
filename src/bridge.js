@@ -8417,8 +8417,8 @@ async function main() {
         sendJson({ ok: false, error: error?.message ?? String(error) }, status);
       }
     });
-    server.listen(port, '0.0.0.0', () => {
-      log(`本地控制台已启动：http://0.0.0.0:${port}（局域网可访问）`);
+    server.listen(port, '127.0.0.1', () => {
+      log(`本地控制台已启动：http://127.0.0.1:${port}（仅本机，经 DSH 反代访问）`);
     });
     // 端口被占用说明已有实例在跑：以 exit 2 退出，守护脚本会识别为"已有实例"而不是无限重启
     server.on('error', (error) => {
