@@ -1671,6 +1671,9 @@ async function main() {
       url: ragFileCfg.url,
       timeoutMs: ragFileCfg.timeoutMs,
       recallTimeoutMs: ragFileCfg.recall?.timeoutMs,
+      // M5：局域网直连的 token 认证 + 放行远程地址（受 token 保护）。
+      token: ragFileCfg.token,
+      allowRemote: ragFileCfg.allowRemote === true,
       // 开关创建失败时按「关」处理（规格 §3.3 / 任务书：这时把 isEnabled 当 false）。
       // ragControl 在下面才建，但这段闭包只会在调用时求值，那时已经初始化好了。
       isEnabled: () => (ragControl ? ragControl.enabled() === true : false),

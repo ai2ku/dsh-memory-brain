@@ -19,7 +19,8 @@ import time
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from .archive import valid_key
@@ -29,6 +30,28 @@ from .service import RebuildRunning, Service, request_at
 
 svc = Service()
 app = FastAPI(title="memory-rag", docs_url=None, redoc_url=None, openapi_url=None)
+
+
+# ── M5：API token 认证（局域网直连 + token）。未配置 token 时不鉴权（本地开发兼容）。
+# 配置后：除 /health（探活）外，所有请求须带 X-API-Token 或 Authorization: Bearer <token>。
+API_TOKEN = os.environ.get("MEMORY_RAG_API_TOKEN", "").strip()
+
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    if API_TOKEN:
+        path = request.url.path
+        if path != "/health":
+            supplied = request.headers.get("x-api-token") or ""
+            if not supplied:
+                auth = request.headers.get("authorization") or ""
+                if auth.startswith("Bearer "):
+                    supplied = auth[7:].strip()
+            # 常量时间比较，防时序攻击
+            import hmac
+            if not hmac.compare_digest(supplied, API_TOKEN):
+                return JSONResponse({"detail": "invalid token"}, status_code=401)
+    return await call_next(request)
 
 
 class SearchReq(BaseModel):

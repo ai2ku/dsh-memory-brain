@@ -165,7 +165,7 @@ export function normalizeKeywords(input) {
 /**
  * 只允许回环地址。聊天原文会随查询发过去，指向外部等同于把私聊内容外发。
  */
-function assertLoopback(urlText) {
+function assertLoopback(urlText, allowRemote = false) {
   let parsed;
   try {
     parsed = new URL(urlText);
@@ -175,13 +175,15 @@ function assertLoopback(urlText) {
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     throw new Error(`memory-rag 地址只能是 http(s)：${urlText}`);
   }
-  if (!LOOPBACK_HOSTS.has(parsed.hostname)) {
+  // M4：allowRemote（局域网直连，受 M5 token 保护）时放行非回环地址；
+  // 否则仍只允许回环（本地开发 / 本机 sidecar）。
+  if (!LOOPBACK_HOSTS.has(parsed.hostname) && !allowRemote) {
     throw new Error(`memory-rag 只允许回环地址（127.0.0.1 / localhost / ::1），拒绝：${parsed.hostname}`);
   }
   return `${parsed.origin}${parsed.pathname.replace(/\/+$/, '')}`;
 }
 
-export function createMemoryRagClient({ url = DEFAULT_URL, timeoutMs = DEFAULT_TIMEOUT_MS, recallTimeoutMs = RECALL_DEFAULT_TIMEOUT_MS, isEnabled = () => true, log = () => {} } = {}) {
+export function createMemoryRagClient({ url = DEFAULT_URL, timeoutMs = DEFAULT_TIMEOUT_MS, recallTimeoutMs = RECALL_DEFAULT_TIMEOUT_MS, token = '', allowRemote = false, isEnabled = () => true, log = () => {} } = {}) {
   // APIHUB_PATCH：控制台的总开关关掉后，桥接不该再向 memory-rag 发任何请求（服务已经停了，
   // 发了也只是等超时）。这里统一在每个方法入口拦一次，各处调用点本来就把「不可用」当正常情况。
   // 不传 isEnabled 时恒为 true：老调用方（测试 / 脚本）行为逐字不变。
@@ -190,7 +192,9 @@ export function createMemoryRagClient({ url = DEFAULT_URL, timeoutMs = DEFAULT_T
   };
   // 关着时写操作返回与服务不可用一致的形态，桥接现有的 409 / queued 映射不用改。
   const offResult = () => ({ ok: false, status: 503, data: { off: true, error: 'RAG 已关闭' } });
-  const baseUrl = assertLoopback(String(url || DEFAULT_URL).trim());
+  // M5：API token（局域网直连时校验）。配置后每个请求带 X-API-Token。
+  const apiToken = String(token ?? '').trim();
+  const baseUrl = assertLoopback(String(url || DEFAULT_URL).trim(), allowRemote);
   const timeout = clampInt(timeoutMs, 100, 60000, DEFAULT_TIMEOUT_MS);
   // RAG_PATCH（P3）：/recall 走的是唤醒路径，超时单独一个（夹到 100～5000）：
   // 配成 0 会变成永远「不可达」，配成 30 秒则会把一次唤醒拖住半分钟。
@@ -200,7 +204,9 @@ export function createMemoryRagClient({ url = DEFAULT_URL, timeoutMs = DEFAULT_T
 
   async function request(pathname, init, timeoutMs = timeout) {
     try {
-      return await fetch(`${baseUrl}${pathname}`, { ...init, signal: AbortSignal.timeout(timeoutMs) });
+      const headers = { ...(init?.headers || {}) };
+      if (apiToken) headers['X-API-Token'] = apiToken;
+      return await fetch(`${baseUrl}${pathname}`, { ...init, headers, signal: AbortSignal.timeout(timeoutMs) });
     } catch {
       // 连接被拒 / 超时 / DNS：都当服务不可用，交给调用方降级。
       return null;
