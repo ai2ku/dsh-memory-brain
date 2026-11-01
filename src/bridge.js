@@ -1934,6 +1934,20 @@ async function main() {
   // ── DECAY_PATCH：记忆代谢的记账助手（子项目 2 · docs/design/MEMORY_DECAY_SPEC.md） ──
   // ownerId 每次现取（主人号和白名单都能热重载）；亲密度取人格模块的关系，没有就是 undefined。
   function ownerId() { return String(cfg.ownerQQ ?? ''); }
+  // ── CROSS_DEVICE_PATCH：跨端共享记忆的用户标识（可配置，不写死 root）──
+  function crossUserId() {
+    try {
+      const c = readJsonSafe(path.join(ROOT, 'config.json'), null);
+      const u = c?.crossDevice?.userId;
+      return (typeof u === 'string' && u.trim()) ? u.trim() : 'root';
+    } catch { return 'root'; }
+  }
+  /** 记忆 key：QQ 私聊（owner）映射到跨端共享 chat:{userId}；群聊/其他保留原样。 */
+  function memoryKey(sessionKey) {
+    const s = String(sessionKey || '');
+    if (s === `private:${ownerId()}`) return `chat:${crossUserId()}`;
+    return s;
+  }
   function intimacyOf(uid) {
     try { return persona?.relationOf?.(uid)?.intimacy; } catch { return undefined; }
   }
@@ -4215,7 +4229,7 @@ async function main() {
               if (r.deleted > 0) {
                 if (!rag) forget = 'off';
                 else {
-                  const fr = await rag.forget(key);
+                  const fr = await rag.forget(memoryKey(key));
                   if (fr && fr.ok) {
                     forget = 'done';
                     removedChunks = fr.data?.removed_chunks ?? null;
@@ -6812,7 +6826,7 @@ async function main() {
               const ragOff = !rag?.enabled?.();
 
               if (mode !== 'keyword' && hasSearchText && rag && !ragOff) {
-                const r = await rag.search({ key, query, keywords, from, to, speaker, k, expand });
+                const r = await rag.search({ key: memoryKey(key), query, keywords, from, to, speaker, k, expand });
                 if (r) {
                   const hint = [r.items.length < 2 ? retryHint : '', r.hint ?? ''].filter(Boolean).join(' ');
                   log(`[rag] ${key} source=rag semantic=${r.semantic} items=${r.items.length} ${Date.now() - startedAt}ms`);
@@ -10510,7 +10524,7 @@ async function main() {
     Promise.resolve().then(async () => {
       const startedAt = Date.now();
       let recalled = null;
-      try { recalled = await rag.recall({ key, texts: plan.texts, k: plan.settings.k }); } catch { recalled = null; }
+      try { recalled = await rag.recall({ key: memoryKey(key), texts: plan.texts, k: plan.settings.k }); } catch { recalled = null; }
       logRecallShadow({ key, reason, mode: 'shadow', msgs: plan.msgs, recalled, ms: Date.now() - startedAt });
     }).catch(() => { /* 影子日志的问题绝不影响唤醒 */ });
   }
@@ -10718,7 +10732,7 @@ async function main() {
         // 客户端自带超时（默认 400 ms）：超时就是没想起来，唤醒照常继续。
         const startedAt = Date.now();
         let recalled = null;
-        try { recalled = await rag.recall({ key, texts: recallPlan.texts, k: recallPlan.settings.k }); } catch { recalled = null; }
+        try { recalled = await rag.recall({ key: memoryKey(key), texts: recallPlan.texts, k: recallPlan.settings.k }); } catch { recalled = null; }
         recallBlock = buildRecallBlock(recalled);
         logRecallShadow({ key, reason: opts.wakeReason, mode: 'on', msgs: recallPlan.msgs, recalled, ms: Date.now() - startedAt });
         recallPlan = null;
@@ -11038,7 +11052,7 @@ async function main() {
         isAllowed: (key) => currentMode === 'reserved2' && !socialV2.paused && cfg.socialV2?.enabled !== false && isSessionAllowedInCurrentMode(key),
         // RAG_PATCH（P3）：联想链（docs/design/ASSOCIATION_SPEC.md §9.3）。只查主人私聊——
         // 「顺着想起」是她自己记忆里的事，不该混进别人的会话。没客户端时给 null，生活回路退回同步结果。
-        associate: (params) => (rag ? rag.associate({ key: 'private:' + String(cfg.ownerQQ ?? ''), ...params }) : Promise.resolve(null)),
+        associate: (params) => (rag ? rag.associate({ key: memoryKey('private:' + String(cfg.ownerQQ ?? '')), ...params }) : Promise.resolve(null)),
         options: {
           recallPerDay: conf.recallPerDay,
           cooldownDays: conf.cooldownDays,
